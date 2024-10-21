@@ -2,22 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+button {
+  @apply bg-green-300 rounded-xl p-2 mr-2 border-2 border-black
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dfBtn {
+  @apply bg-gray-200 p-0 rounded  border pl-1 pr-1
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+input {
+  @apply rounded
 }
 
 @layer utilities {

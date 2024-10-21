@@ -1,101 +1,240 @@
+"use client"
+
 import Image from "next/image";
+import { list } from "postcss";
+import { useState, useEffect, useRef } from 'react';
+
+let scroll = "_"
+let section = "_"
+let distance = "_"
+
+function date_to_mars(date: Date): [number, number, number, number, number] {
+  /*
+  We are going to use a proposed Martian Calendar that is extremely accurate.
+  A year changes between 668 and 669 days. A "Leap Year" occurs every odd
+  year, every year divisible by ten but not divisible by 100. Accepts the date object in js.
+  */
+  let year = 0;
+  let hours = (date.getTime() + 62135596800000) / 3600000
+
+  while (hours >= 16497.4731) {
+      year += 1;
+      if ((year % 2 !== 0 || year % 10 === 0) && year % 100 !== 0) {
+          hours -= 16497.4731;
+      } else {
+          hours -= 16472.8132;
+      }
+  }
+  const day = Math.floor(hours / 24.6599);
+  hours -= day * 24.6599;
+  let leftovers = hours % 1;
+  hours -= leftovers;
+  const minutes = Math.floor(leftovers * 60);
+  leftovers -= minutes / 60;
+  const seconds = leftovers * 3600;
+
+  return [year + 1, day + 1, Math.floor(hours), minutes, Math.round(seconds / 3)];
+}
+
+
+function Diagram() {
+  // State for scales, section, positioning, etc.
+  const [rScalePower, setRScalePower] = useState(3);
+  const [dScalePower, setDScalePower] = useState(4);
+  const [section, setSection] = useState(0);
+  const [positioning, setPositioning] = useState([
+    // Initial celestial data for demo
+    { radius: 100, orbRadius: 200, xOffset: 50, symbol: '☉', color: 'yellow', fontColor: 'black', fontSize: 1 },
+    { radius: 50, orbRadius: 100, xOffset: 150, symbol: '⚪', color: 'blue', fontColor: 'white', fontSize: 1 },
+  ]);
+
+  const [maxDist, setMaxDist] = useState(0);
+  const [outputText, setOutputText] = useState('Scroll: _<br>Section: _<br>Distance: _ km');
+
+  const ODBoxRef = useRef(null);
+  const rDispRef = useRef(null);
+  const dDispRef = useRef(null);
+  const cropContRef = useRef(null);
+  const rightSignRef = useRef(null);
+  const leftSignRef = useRef(null);
+
+  // Constants
+  const MaxRScale = 4;
+  const MaxDScale = 7;
+  const rightThres = 10 ** 5;
+  const leftThres = 100;
+  const increment = rightThres / 2;
+  const offset = 400;
+
+  // Function to handle scrolling
+  const handleScroll = () => {
+    const ODBox = ODBoxRef.current;
+    const dist = Math.floor((ODBox.scrollLeft + section * increment * -1 - 400) * 10 ** dScalePower);
+
+    setOutputText(`Scroll: ${ODBox.scrollLeft}<br>Section: ${section}<br>Distance: ${dist} km`);
+
+    if (ODBox.scrollLeft > rightThres) {
+      ODBox.scrollLeft = increment;
+      setSection(section - 1);
+    }
+
+    if (ODBox.scrollLeft < leftThres && section !== 0) {
+      ODBox.scrollLeft = increment + leftThres;
+      setSection(section + 1);
+    }
+  };
+
+  // Functions to update scales
+  const rScaleSub = () => {
+    if (rScalePower < MaxRScale) {
+      setRScalePower(rScalePower + 1);
+    }
+  };
+
+  const rScaleAdd = () => {
+    if (rScalePower > 0) {
+      setRScalePower(rScalePower - 1);
+    }
+  };
+
+  const dScaleSub = () => {
+    if (dScalePower < MaxDScale) {
+      setDScalePower(dScalePower + 1);
+    }
+  };
+
+  const dScaleAdd = () => {
+    if (dScalePower > 0) {
+      setDScalePower(dScalePower - 1);
+    }
+  };
+
+  // Rendering Celestials and Orbitals
+  const renderCelestials = () => {
+    const rScale = 10 ** rScalePower;
+    const dScale = 10 ** dScalePower;
+
+    return positioning.map((pos, i) => {
+      const { radius, orbRadius, xOffset, symbol, color, fontColor, fontSize } = pos;
+
+      const scaledRadius = radius / rScale;
+      const scaledOrbRadius = orbRadius / dScale;
+      const scaledXOffset = xOffset / dScale;
+
+      const x = scaledOrbRadius + scaledXOffset + offset + section * increment;
+      const y = 200; // Fixed Y position
+
+      return (
+        <div key={i} style={{ position: 'absolute', left: `${x}px`, top: `${y - scaledRadius}px` }}>
+          {/* Orbital */}
+          <div
+            style={{
+              position: 'absolute',
+              width: `${scaledOrbRadius * 2}px`,
+              height: `${scaledOrbRadius * 2}px`,
+              borderRadius: '50%',
+              border: '2px solid gray',
+              left: `${x - scaledOrbRadius}px`,
+              top: `${y - scaledOrbRadius}px`,
+            }}
+          ></div>
+          {/* Celestial */}
+          <div
+            style={{
+              backgroundColor: color,
+              width: `${scaledRadius * 2}px`,
+              height: `${scaledRadius * 2}px`,
+              borderRadius: '50%',
+              textAlign: 'center',
+              lineHeight: `${scaledRadius * 2}px`,
+              color: fontColor,
+              fontSize: `${scaledRadius * fontSize}px`,
+            }}
+          >
+            {symbol}
+          </div>
+        </div>
+      );
+    });
+  };
+
+  return (
+    <>
+      <h2 className="text-2xl mb-5">Orbit Diagram Selector</h2>
+      <div ref={ODBoxRef} className="ODBox" style={{ overflowX: 'scroll', position: 'relative', height: '500px', background: '#eee' }}>
+        <div ref={cropContRef} style={{ position: 'absolute', width: '10000px', height: '100%' }}>{renderCelestials()}</div>
+      </div>
+      <div id="output" dangerouslySetInnerHTML={{ __html: outputText }} className="log"></div>
+      <p ref={rDispRef}>Radius px = km / {10 ** rScalePower}</p>
+      <div className="navigation">
+        <button type="button" onClick={rScaleAdd} className="nav">+</button>
+        <button type="button" onClick={rScaleSub} className="nav">-</button>
+      </div>
+      <p ref={dDispRef}>Distance px = km / {10 ** dScalePower}</p>
+      <div className="navigation">
+        <button type="button" onClick={dScaleAdd} className="nav">+</button>
+        <button type="button" onClick={dScaleSub} className="nav">-</button>
+      </div>
+      <div id="scrollNavBar" className="navigation"></div>
+    </>
+  );
+}
+
+function Converter() {
+  const [marsTime, setMarsTime] = useState('');
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const printPlanetTime = (date: [number, number, number, number, number]) => {
+    /*
+      Prints a date in human readable format.
+      date should be a tuple formatted like the following:
+      (year, day, hours, minutes, seconds)
+    */
+    const year = date[0];
+    const day = date[1];
+    const hours = String(date[2]).padStart(2, '0');
+    const minutes = String(date[3]).padStart(2, '0');
+    const seconds = String(date[4]).padStart(2, '0');
+  
+    const out = `Year ${year}, day ${day}, ${hours}:${minutes}:${seconds}`;
+    console.log(out);
+    setMarsTime(out);
+  }
+  
+
+  const handleCalculate = () => {
+    const marsDate = date_to_mars(currentDate);
+    printPlanetTime(marsDate);
+  }
+
+  const handleNowClick = () => {
+    setCurrentDate(new Date());
+  }
+
+  return <>
+    <label htmlFor="time">Time: </label>
+    <input type="text" id="name" name="time" className="bg-gray-200 ml-1" value={currentDate.toLocaleString()} readOnly/>
+    <button className="dfBtn ml-2" onClick={handleNowClick}>Now</button>
+    <br />
+    <button className="dfBtn" onClick={handleCalculate}>Calculate</button>
+    <br />
+    <h1>Mars time:</h1>
+    <br />
+    <p id="calcOut">{marsTime}</p>
+  </>
+}
 
 export default function Home() {
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+    <div className="ml-20 mr-20 mt-5">
+      <h1 className="text-3xl mb-5 text-center">
+        Cosmic Calendars - Celestial Time Translator
+      </h1>
+      <h2 className="text-xl bg-gray-200 bg-opacity-90 p-2 rounded-xl mb-5">
+        Status: <span className="bg-green-300 rounded-xl p-1">Awaiting Input</span>
+      </h2>
+      <Diagram />
+      <Converter />
     </div>
   );
 }
